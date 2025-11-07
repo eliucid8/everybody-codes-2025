@@ -1,0 +1,3 @@
+Wyndax,Valvoran,Thalkyr,Yndoris,Axaldax,Zraalural,Quordaros,Thyrosvoran,Ildelor,Orymal,Tyronar,Sarnfyr,Selzar,Xaralgalor,Morulrix,Paldaxis,Rythannoris,Jalnyn,Xendselor,Doraris,Sorcyth,Zarathvash,Tarlonar,Vornzral,Eltonar,Aerdaros,Cynvarzral,Yndcyth,Thazfal,Ulluth
+
+L34,R24,L23,R42,L32,R9,L11,R35,L24,R16,L40,R14,L47,R28,L11,R33,L23,R43,L22,R31,L5,R16,L5,R37,L5,R36,L5,R42,L5,R49,L5,R44,L5,R46,L5,R43,L5,R48,L5,R15,L13,R32,L31,R29,L21,R32,L43,R48,L44,R10,L9,R23,L30,R25,L12,R18,L41,R31,L23

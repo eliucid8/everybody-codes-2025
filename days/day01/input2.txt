@@ -1,0 +1,3 @@
+Ravdra,Pylaririn,Felmarzrak,Breldrith,Rythanthyris,Krynnix,Raldar,Garaxis,Felnlith,Raelbel,Ferketh,Drethulrix,Cyndxelor,Toraes,Hareon,Thazgarath,Varindrith,Luthisis,Xarkyr,Voraxvalir
+
+L15,R9,L9,R11,L9,R18,L15,R12,L12,R18,L5,R19,L5,R14,L5,R13,L5,R14,L5,R9,L19,R8,L14,R16,L18,R6,L9,R14,L15
