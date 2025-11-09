@@ -38,7 +38,7 @@ std::vector<int> tokenize_int(const std::string& s, const std::string& delimiter
         tokens.push_back(std::stoi(temp_s.substr(0, pos)));
         temp_s.erase(0, pos + delimiter.length());
     }
-    tokens.push_back(std::any_cast<int>(temp_s)); // Add the last token
+    tokens.push_back(std::stoi(temp_s)); // Add the last token
 
     return tokens;
 }

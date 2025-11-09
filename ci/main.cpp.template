@@ -1,8 +1,15 @@
 #include "utils.hpp"
 #include <iostream>
 
-int main() {
-    auto lines = read_lines("days/dayXX/input.txt");
+std::string part1(std::vector<std::string> input) {
+    return "";
+}
 
-    std::cout << "Line count: " << lines.size() << std::endl;
+int main() {
+    std::string ans1 = part1(read_lines("days/dayXX/input.txt"));
+    std::cout << "Answer 1: " << ans1 << std::endl;
+    # std::string ans2 = part2(read_lines("days/dayXX/input2.txt"));
+    # std::cout << "Answer 2: " << ans2 << std::endl;
+    # std::string ans3 = part3(read_lines("days/dayXX/input3.txt"));
+    # std::cout << "Answer 3: " << ans3 << std::endl;
 }
