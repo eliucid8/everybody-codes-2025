@@ -2,13 +2,14 @@
 set -euo pipefail
 
 # Usage:
-#   ./tools/run_day.sh <day> [--test] [--preset debug] [--build-dir build-debug] [--] [program args...]
+#   ./tools/run_day.sh <day> [--test] [--preset PRESET] [--build-dir BUILD_DIR] [--no-configure] [--] [program args...]
 #
 # Examples:
 #   ./tools/run_day.sh 1                    # build/debug/preset "debug", run days/day01/day01 with input.txt
 #   ./tools/run_day.sh 3 --test             # run with test_input.txt
 #   ./tools/run_day.sh 10 --preset debug -- --flag foo
 #   ./tools/run_day.sh 7 --build-dir build-release -- arg1 arg2
+#   ./tools/run_day.sh 4 --no-configure     # try building without reconfiguring (may fail if target unknown)
 
 # Defaults - change if you prefer other names
 DEFAULT_PRESET="debug"
@@ -17,7 +18,7 @@ DAYS_SOURCE_DIR="days"
 
 # Parse positional + options
 if [[ $# -lt 1 ]]; then
-  echo "Usage: $0 <day-number> [--test] [--preset PRESET] [--build-dir BUILD_DIR] [--] [program args...]"
+  echo "Usage: $0 <day-number> [--test] [--preset PRESET] [--build-dir BUILD_DIR] [--no-configure] [--] [program args...]"
   exit 2
 fi
 
@@ -27,6 +28,7 @@ shift
 use_test_input=false
 preset="${DEFAULT_PRESET}"
 build_dir="${DEFAULT_BUILD_DIR}"
+no_configure=false
 # collect program args after `--`
 prog_args=()
 
@@ -44,6 +46,10 @@ while [[ $# -gt 0 ]]; do
     --build-dir)
       if [[ $# -lt 2 ]]; then echo "Missing value for --build-dir"; exit 2; fi
       build_dir="$2"; shift 2
+      ;;
+    --no-configure)
+      no_configure=true
+      shift
       ;;
     --) shift; prog_args=("$@"); break
       ;;
@@ -77,40 +83,96 @@ if [[ ! -d "${target_dir}" ]]; then
   exit 4
 fi
 
-# Build: prefer cmake --build --preset <preset> if supported, otherwise fallback to cmake --build <build_dir>
-echo "Building target '${target_name}' (preset='${preset}', build-dir='${build_dir}')..."
+# ---------- helper: configure build dir or preset ----------
+ensure_configured() {
+  # Arguments:
+  #   $1 = preset (may be empty)
+  #   $2 = build_dir
+  local preset="$1"
+  local build_dir="$2"
 
-build_ok=false
-if cmake --help 2>/dev/null | grep -q -- --preset; then
-  # cmake supports --build --preset
-  if cmake --build --preset "${preset}" --target "${target_name}"; then
-    build_ok=true
-  else
-    echo "Warning: build with preset '${preset}' failed; attempting fallback build-dir '${build_dir}'..."
+  if [[ "${no_configure}" == "true" ]]; then
+    echo "Auto-configure disabled (--no-configure); skipping configure step."
+    return 0
   fi
-else
-  echo "Info: this cmake does not support --build --preset; falling back to build-dir approach."
-fi
 
-if ! $build_ok ; then
-  # fallback: ensure build dir exists (configure if needed)
-  if [[ ! -d "${build_dir}" || ! -f "${build_dir}/CMakeCache.txt" ]]; then
-    echo "Build directory '${build_dir}' not configured. Configuring it now as Debug build..."
+  if [[ -n "${preset}" ]] && cmake --help 2>/dev/null | grep -q -- --preset; then
+    echo "Configuring via preset: ${preset}"
+    cmake --preset "${preset}"
+  else
+    echo "Configuring via cmake -S . -B ${build_dir} -DCMAKE_BUILD_TYPE=Debug"
     cmake -S . -B "${build_dir}" -DCMAKE_BUILD_TYPE=Debug
   fi
 
-  cmake --build "${build_dir}" --target "${target_name}"
+  # Optional: keep a convenient compile_commands.json in repo root for clangd/Neovim
+  if [[ -f "${build_dir}/compile_commands.json" ]]; then
+    ln -sf "${build_dir}/compile_commands.json" compile_commands.json
+  fi
+}
+
+# ---------- build attempt with auto-configure ----------
+build_target_with_possible_reconfigure() {
+  local preset="$1"
+  local build_dir="$2"
+  local target="$3"
+
+  # Prefer preset-aware build if supported
+  if cmake --build --help 2>/dev/null | grep -q -- --preset; then
+    if cmake --build --preset "${preset}" --target "${target}"; then
+      return 0
+    else
+      # If auto-configure is disabled, don't attempt to reconfigure
+      if [[ "${no_configure}" == "true" ]]; then
+        echo "Preset-aware build failed and auto-configure disabled. Aborting."
+        return 1
+      fi
+      echo "Preset-aware build failed (maybe stale configuration). Will reconfigure and retry."
+      ensure_configured "${preset}" "${build_dir}"
+      if cmake --build --preset "${preset}" --target "${target}"; then
+        return 0
+      else
+        echo "Build still failed after reconfigure."
+        return 1
+      fi
+    fi
+  fi
+
+  # Fallback flow for cmake versions without --build --preset
+  if cmake --build "${build_dir}" --target "${target}"; then
+    return 0
+  else
+    if [[ "${no_configure}" == "true" ]]; then
+      echo "Build failed (target probably unknown) and auto-configure disabled. Aborting."
+      return 1
+    fi
+    echo "Build failed (target probably unknown). Reconfiguring ${build_dir} and retrying..."
+    ensure_configured "" "${build_dir}"
+    if cmake --build "${build_dir}" --target "${target}"; then
+      return 0
+    else
+      echo "Build failed after reconfigure."
+      return 1
+    fi
+  fi
+}
+
+# Build: prefer cmake --build --preset <preset> if supported, otherwise fallback to cmake --build <build_dir>
+echo "Building target '${target_name}' (preset='${preset}', build-dir='${build_dir}')..."
+
+if ! build_target_with_possible_reconfigure "${preset}" "${build_dir}" "${target_name}"; then
+  echo "ERROR: Unable to build target ${target_name}."
+  exit 5
 fi
 
 # After build, check executable exists (adjust for generator specifics if necessary)
 if [[ ! -x "${exe_path}" ]]; then
-  echo "Executable not found at expected path: ${exe_path}"
   # try to locate target if ninja or different layout created it elsewhere
   alt_path="$(find "${build_dir}" -type f -name "${target_name}" -perm /u=x,g=x,o=x | head -n1 || true)"
   if [[ -n "${alt_path}" ]]; then
     echo "Found executable at ${alt_path}; using that."
     exe_path="${alt_path}"
   else
+    echo "Executable not found at expected path: ${exe_path}"
     echo "Could not find executable for ${target_name}; aborting."
     exit 6
   fi
@@ -125,16 +187,14 @@ fi
 
 if [[ ! -f "${input_file}" ]]; then
   echo "Warning: input file does not exist: ${input_file} (running without redirected input)."
-  run_cmd=( "${exe_path}" "${prog_args[@]}" )
-else
-  run_cmd=( "${exe_path} ${prog_args[@]} < ${input_file}" )
 fi
 
 echo "Running ${exe_path} with input ${input_file} ..."
 # If input file exists, run with it as stdin; handle piping correctly:
 if [[ -f "${input_file}" ]]; then
   # Use exec so signals propagate and exit code visible
-  exec "${exe_path}" "${prog_args[@]}" < "${input_file}"
+  exec "${exe_path}" "${prog_args[@]:-}" < "${input_file}"
 else
-  exec "${exe_path}" "${prog_args[@]}"
+  exec "${exe_path}" "${prog_args[@]:-}"
 fi
+
