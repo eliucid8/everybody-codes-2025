@@ -1,6 +1,8 @@
 #include "utils.hpp"
 #include <iostream>
 
+using namespace std;
+
 std::string part1(std::vector<std::string> input) {
     return "";
 }
